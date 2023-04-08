@@ -6,7 +6,7 @@ import sys
 import warnings
 
 
-reno_num_threads = os.environ.get("RENO_NUM_THREADS")
+reno_num_threads = os.environ.get("RENO_NUM_THREADS", 1)
 if reno_num_threads is not None:
     # Set environment variables to limit NumPy CPU usage
     # Note that this should be done before NumPy is imported

@@ -20,7 +20,7 @@ from renormalizer.mps.hop_expr import  hop_expr
 from renormalizer.mps.svd_qn import get_qn_mask
 from renormalizer.mps import Mpo, Mps
 from renormalizer.mps.lib import Environ, cvec2cmat
-from renormalizer.utils import Quantity
+from renormalizer.utils import Quantity, CompressConfig, CompressCriteria
 
 logger = logging.getLogger(__name__)
 
@@ -107,12 +107,21 @@ def optimize_mps(mps: Mps, mpo: Mpo, omega: float = None) -> Tuple[List, Mps]:
     # determines the index of active site of the returned mps
     opt_e_idx: int = None
     res_mps: Union[Mps, List[Mps]] = None
-    for isweep, (mmax, percent) in enumerate(mps.optimize_config.procedure):
+    for isweep, (compress_config, percent) in enumerate(mps.optimize_config.procedure):
         logger.debug(f"isweep: {isweep}")
-        logger.debug(f"mmax, percent: {mmax}, {percent}")
+        
+        if isinstance(compress_config, CompressConfig):
+            mps.compress_config = compress_config
+        elif isinstance(compress_config, int):
+            mps.compress_config = CompressConfig(criteria=CompressCriteria.fixed,
+                    max_bonddim = compress_config)
+        else:
+            assert False
+        logger.debug(f"compress config in current loop: {compress_config}, percent: {percent}")
+
         logger.debug(f"{mps}")
 
-        micro_iteration_result, res_mps, mpo = single_sweep(mps, mpo, environ, omega, mmax, percent, opt_e_idx)
+        micro_iteration_result, res_mps, mpo = single_sweep(mps, mpo, environ, omega, percent, opt_e_idx)
 
         opt_e = min(micro_iteration_result)
         macro_iteration_result.append(opt_e[0])
@@ -149,11 +158,10 @@ def single_sweep(
     mpo: Mpo,
     environ: Environ,
     omega: float,
-    mmax: int,
     percent: float,
     last_opt_e_idx: int
 ):
-
+    
     method = mps.optimize_config.method
     nroots = mps.optimize_config.nroots
 
@@ -254,15 +262,15 @@ def single_sweep(
         if cidx == last_opt_e_idx:
             if nroots == 1:
                 res_mps = mps.copy()
-                res_mps._update_mps(cstruct, cidx, qnbigl, qnbigr, mmax, percent)
+                res_mps._update_mps(cstruct, cidx, qnbigl, qnbigr, percent)
             else:
                 res_mps = [mps.copy() for i in range(len(cstruct))]
                 for iroot in range(len(cstruct)):
                     res_mps[iroot]._update_mps(
-                        cstruct[iroot], cidx, qnbigl, qnbigr, mmax, percent
+                        cstruct[iroot], cidx, qnbigl, qnbigr, percent
                     )
 
-        averaged_ms = mps._update_mps(cstruct, cidx, qnbigl, qnbigr, mmax, percent)
+        averaged_ms = mps._update_mps(cstruct, cidx, qnbigl, qnbigr, percent)
         if mps.compress_config.ofs is not None:
             mpo.try_swap_site(mps.model, mps.compress_config.ofs_swap_jw)
 
